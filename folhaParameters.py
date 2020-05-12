@@ -27,7 +27,7 @@ class folhaParam():
     def profileBounds(self):
         x = self.inputData[:,0]
         y = self.inputData[:,1]
-        prec = np.amax(y)/1.2
+        prec = np.amax(y)/2
         l = len(y)
         for ii in range(0,l,1):
             if((y[ii+1] -1.0) >= prec):
