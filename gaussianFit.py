@@ -12,7 +12,8 @@ class fitGaussian():
         else:
             print("ERROR: No imput data")
         if(addNoise):
-            self.y += np.sqrt(abs(self.y)) * np.random.random(self.x.size) - 0.5
+            noise = np.random.normal(1,0.05*np.amax(self.y),self.x.size)
+            self.y += noise
         self.cont = (self.y[0] + self.y[-1])/2.0
         self.y -= self.cont
 
