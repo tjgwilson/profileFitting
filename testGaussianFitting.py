@@ -15,6 +15,7 @@ c=0
 check = 1
 for name in filename:
     data = fitGaussian(name)
+    data.fwhm()
     x = data.x
     y = data.y
     fit = data.fit
