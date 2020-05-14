@@ -103,7 +103,7 @@ r=0
 c=0
 check = 1
 for name in filename:
-    data = fitGaussian(name,addNoise=True)
+    data = fitGaussian(name)
     x = data.x
     y = data.y
     fit = data.fit
