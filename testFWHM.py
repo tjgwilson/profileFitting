@@ -4,5 +4,9 @@ import gaussianFitting as gf
 
 fitter = gf.fitGaussian("halpha_020_06562.dat",verbose=True)
 
-fitter.calcFWHM()
-print(fitter.FWHM)
+# fitter.calcFWHM()
+# fitter.calcHWZM()
+# fitter.calcCentre()
+# fitter.calcPeakFlux()
+fitter.calcEqWidths(6562.)
+print(fitter.eqWidths)
