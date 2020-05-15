@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 class fitGaussian():
     def __init__(self,filename=None,data=None,col=1,addNoise=False,sensitivity=1,verbose=False):
+        self.c = 299792.458
         self.sensitivity = sensitivity / 100.
         self.verbose = verbose
         if(filename != None):
@@ -21,8 +22,8 @@ class fitGaussian():
             self.y += noise
         self.cont = (self.y[0] + self.y[-1])/2.0
         self.y -= self.cont
-
         self.fit = fitGaussian.createFit(self)
+
 
         if(self.verbose):
         ####debugging#####
@@ -131,8 +132,8 @@ class fitGaussian():
             plt.ylabel("flux")
             plt.legend()
             plt.show()
-        #Finds the HWZM for the main fit and all the component gaussians: n is the number of points used to create the loop
-        #precision is the sensitivity to which it detect the required points on the curve, detects at 2% peak hight.
+        #Finds the HWZM for the main fit and all the component gaussians: n is the number of points used to create the loop##[km/s]
+        #precision is the sensitivity to which it detect the required points on the curve, detects at 2% peak hight.##[km/s]
     def calcHWZM(self,n=100000,precision=0.001,zeroMag = 0.02):
 
         self.HWZM = []
@@ -178,7 +179,7 @@ class fitGaussian():
             plt.ylabel("flux")
             plt.legend()
             plt.show()
-    #Calculate centres of fit, and gaussian components, stored in self.centres
+    #Calculate centres of fit, and gaussian components, stored in self.centres ##[km/s]
     def calcCentre(self,n=100000,precision=0.001):
         self.centres = []
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
@@ -201,7 +202,7 @@ class fitGaussian():
             for c in self.centres:
                 plt.axvline(c)
             plt.show()
-    #Calculates the peak flux for the fit and the gaussian components, stored into self.peaks
+    #Calculates the peak flux for the fit and the gaussian components, stored into self.peaks ##[km/s]
     def calcPeakFlux(self,n=100000,precision=0.001):
         self.peaks = []
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
@@ -223,38 +224,47 @@ class fitGaussian():
                 plt.axhline(y=c)
             plt.show()
 
+        #calculates the equivilant width of the fitted line and the component gaussians
+        #output is in angstroms - converts velocity space to wavelength space
+        #prio to integration via trapeziumm method. ###[\AA]
     def calcEqWidths(self,wavelength,bins=100000,dx=0.1):
         from scipy.integrate import trapz
         self.eqWidths = []
-        # c = 299792458.0
-        # wl = wavelength*(c - self.x) / c
-
+        wl= (self.x * wavelength / self.c) + wavelength
         x = np.linspace(np.amin(self.x),np.amax(self.x),bins,endpoint=True)
+        w = np.linspace(np.amin(wl),np.amax(wl),bins,endpoint=True)
         y = (1.0 - ((self.fit(x)+self.cont)/self.cont))
-        self.eqWidths.append(trapz(y,x,dx=dx))
+        self.eqWidths.append(trapz(y,w,dx=dx))
         for f in self.fit:
             y = (1.0 - ((f(x)+self.cont)/self.cont))
-            self.eqWidths.append(trapz(y,x,dx=dx))
-
-        # if(self.verbose):
-        # fitGaussian.calcCentre(self)
-        #     fix, ax = plt.subplots(2)
-        #
-        #     y = self.fit(x)+self.cont
-        #     ax[0].plot(x,y,'r-',alpha=0.8)
-        #     ax[0].fill_between(x,y,self.cont,c='b',alpha=0.8)
-        #     plt.show()
+            self.eqWidths.append(trapz(y,w,dx=dx))
 
 
+        if(self.verbose):
+            fix, ax = plt.subplots(2,sharex=True)
+            y = self.fit(x)+self.cont
+            ax[0].plot(w,(self.fit(x)+self.cont),'r-')
+            ax[0].fill_between(w,self.cont,(self.fit(x)+self.cont),color='r',alpha=0.3)
+            x1 = wavelength-(self.eqWidths[0]/2.)
+            x2 = wavelength+(self.eqWidths[0]/2.)
+            ax[0].plot((x1,x1),(0.,self.cont),color='g')
+            ax[0].plot((x2,x2),(0.,self.cont),color='g')
+            ax[0].fill_between((x1,x2),self.cont,0,color='g',alpha=0.3)
 
-
-
-
-
-
-    def lineParameters(self):
-        pass
-        HWZM = []#
-        peakFLux = []#
-        centre = []#
-        eqWidth = []
+            c = ['c','g','b','r']
+            ii = 0
+            print(np.sum(np.abs(self.eqWidths)))
+            x1 = wavelength-((np.sum(np.abs(self.eqWidths))-abs(self.eqWidths[0]))/2.)
+            for f in self.fit:
+                y = f(x)+self.cont
+                ax[1].plot(w,(f(x)+self.cont),color=c[ii])
+                ax[1].fill_between(w,self.cont,(f(x)+self.cont),color=c[ii],alpha=0.3)
+                x2 = x1 + abs(self.eqWidths[ii+1])
+                ax[1].plot((x1,x1),(0.,self.cont),color=c[ii])
+                ax[1].plot((x2,x2),(0.,self.cont),color=c[ii])
+                ax[1].fill_between((x1,x2),self.cont,0,color=c[ii],alpha=0.3)
+                x1 = x2
+                ii += 1
+            ax[1].set_xlabel(r"Wavelength [$\AA$]")
+            ax[0].set_title("Equivilant widths")
+            plt.show()
