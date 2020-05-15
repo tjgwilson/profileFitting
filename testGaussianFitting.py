@@ -14,8 +14,8 @@ r=0
 c=0
 check = 1
 for name in filename:
-    data = fitGaussian(name)
-    data.fwhm()
+    data = fitGaussian(name,verbose=True)
+    # data.calcEqWidths(6562.)
     x = data.x
     y = data.y
     fit = data.fit
