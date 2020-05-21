@@ -23,31 +23,37 @@ class fitGaussian():
         self.cont = (self.y[0] + self.y[-1])/2.0
         self.y -= self.cont
         self.fit = fitGaussian.createFit(self)
-
+        self.filename = filename
 
         if(self.verbose):
-        ####debugging#####
             print(self.fit)
-            plt.plot(self.x,self.y)
+            plt.plot(self.x,self.y,'k--',alpha=1,label="Input Data")
             for ii in range(self.nMin):
-                plt.plot(self.xMin[ii],self.yMin[ii],'ro',markersize=5)
-            plt.plot(self.xMax,self.yMax,'ko',markersize=5)
-            plt.plot(self.x,self.fit(self.x),'g',alpha=0.5)
+                plt.plot(self.xMin[ii],self.yMin[ii],'ro',markersize=5,label="Sub continuum found")
+            plt.plot(self.xMax[0],self.yMax[0],'ko',markersize=5,label="Peak Max found")
+            plt.plot(self.xMax[1],abs(self.yMax[1]),'co',markersize=5,label="Local Minima found")
+            plt.plot(self.x,self.fit(self.x),'b',alpha=0.7,label="Gaussian Fit")
+            for f in self.fit:
+                plt.plot(self.x,f(self.x),alpha=0.7,label="component Gaussian")
+            plt.title(filename)
+            plt.legend(fontsize=10)
             plt.show()
 
     def createFit(self):
         fitGaussian.findMinima(self)
         fitGaussian.findMaxima(self)
-
         fitter = modeling.fitting.LevMarLSQFitter()
-        g1 = Gaussian1D(self.yMax,self.xMax,10)
-        g2 = Gaussian1D(self.yMax,self.xMax,5)
-        model = g1 + g2
-        gaus = []
+
+        g1 = Gaussian1D(self.yMax[0],self.xMax[0],10)
+        g2 = Gaussian1D(self.yMax[1],self.xMax[1],5)
+        if(self.localMinima):
+            model = g1 - g2
+        else:
+            model = g1 + g2
+
         for ii in range(self.nMin):
-            gaus.append(Gaussian1D(self.yMin[ii],self.xMin[ii],5))
-        for g in gaus:
-            model += g
+            model += Gaussian1D(self.yMin[ii],self.xMin[ii],5)
+
         fitted_model = fitter(model, self.x, self.y)
         return fitted_model
         #find 0,1 or 2 sub continuum minima on either side of the 0 point.
@@ -72,20 +78,65 @@ class fitGaussian():
                     self.nMin += 1
                     tMin = 0.0
                     tXMin = 0.0
+
+
         if((tMin <= prec) and (tXMin < self.x[-1]) and (tXMin > self.x[midii])):
             self.yMin.append(tMin)
             self.xMin.append(tXMin)
             self.nMin += 1
-        #find the peak emission flux and velocity of the peak
+        #find the peak emission flux and velocity of the peak and local mimima - it only reports one local mimia.
+        # the smallest there is
     def findMaxima(self):
+        prec = self.sensitivity
+        self.yMax = []
+        self.xMax = []
         tMax = 0.0
         tXMax = 0.0
+        peakii = 0
         for ii in range(len(self.x)):
             if(self.y[ii] > tMax):
                 tMax = self.y[ii]
                 tXMax = self.x[ii]
-        self.xMax = tXMax
-        self.yMax = tMax
+                peakii = ii
+        self.yMax.append(tMax)
+        self.xMax.append(tXMax)
+
+        localMinima = False
+        tMin = []
+        tXMin = []
+        for ii in range(1,len(self.x)):
+            if(self.y[ii] > prec):
+                grad = (self.y[ii] - self.y[ii-1]) / (self.x[ii] - self.x[ii-1])
+                if((grad < 0.0) and (ii < peakii)):
+                    # plt.plot(self.x[ii],self.y[ii],'rp',alpha=0.5)
+                    tMin.append(self.y[ii])
+                    tXMin.append(self.x[ii])
+                    localMinima = True
+                if((grad > 0.0) and (ii > peakii)):
+                    # plt.plot(self.x[ii],self.y[ii],'bp',alpha=0.5)
+                    tMin.append(self.y[ii])
+                    tXMin.append(self.x[ii])
+                    localMinima = True
+        if(localMinima):
+            temp = tMin[0]
+            depth = 0.0
+            count = 0
+            for ii in range(1,len(tMin)):
+                if(tMin[ii] < temp):
+                    temp = tMin[ii]
+                    count += 1
+            self.yMax.append(-tMin[count])
+            self.xMax.append(tXMin[count])
+        else:
+            self.yMax.append(tMax)
+            self.xMax.append(tXMax)
+
+        # plt.plot(self.x,self.y,'k.')
+        # plt.show()
+        self.localMinima = localMinima
+
+
+
         #Finds the FWHM for the main fit and all the component gaussians: n is the number of points used to create the loop
         #precision is the sensitivity to which it detect the required points on the curve
     def calcFWHM(self,n=100000,precision=0.001):
@@ -179,7 +230,7 @@ class fitGaussian():
             plt.ylabel("flux")
             plt.legend()
             plt.show()
-    #Calculate centres of fit, and gaussian components, stored in self.centres ##[km/s]
+        #Calculate centres of fit, and gaussian components, stored in self.centres ##[km/s]
     def calcCentre(self,n=100000,precision=0.001):
         self.centres = []
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
@@ -202,7 +253,7 @@ class fitGaussian():
             for c in self.centres:
                 plt.axvline(c)
             plt.show()
-    #Calculates the peak flux for the fit and the gaussian components, stored into self.peaks ##[km/s]
+        #Calculates the peak flux for the fit and the gaussian components, stored into self.peaks ##[km/s]
     def calcPeakFlux(self,n=100000,precision=0.001):
         self.peaks = []
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
@@ -223,7 +274,6 @@ class fitGaussian():
             for c in self.peaks:
                 plt.axhline(y=c)
             plt.show()
-
         #calculates the equivilant width of the fitted line and the component gaussians
         #output is in angstroms - converts velocity space to wavelength space
         #prio to integration via trapeziumm method. ###[\AA]
