@@ -31,7 +31,7 @@ class fitGaussian():
             for ii in range(self.nMin):
                 plt.plot(self.xMin[ii],self.yMin[ii],'ro',markersize=5,label="Sub continuum found")
             plt.plot(self.xMax[0],self.yMax[0],'ko',markersize=5,label="Peak Max found")
-            plt.plot(self.xMax[1],abs(self.yMax[1]),'co',markersize=5,label="Local Minima found")
+            plt.plot(self.xMax[1],abs(self.yMax[1])/2,'co',markersize=5,label="Local Minima found")
             plt.plot(self.x,self.fit(self.x),'b',alpha=0.7,label="Gaussian Fit")
             for f in self.fit:
                 plt.plot(self.x,f(self.x),alpha=0.7,label="component Gaussian")
@@ -46,10 +46,7 @@ class fitGaussian():
 
         g1 = Gaussian1D(self.yMax[0],self.xMax[0],10)
         g2 = Gaussian1D(self.yMax[1],self.xMax[1],5)
-        if(self.localMinima):
-            model = g1 - g2
-        else:
-            model = g1 + g2
+        model = g1 + g2
 
         for ii in range(self.nMin):
             model += Gaussian1D(self.yMin[ii],self.xMin[ii],5)
@@ -125,7 +122,7 @@ class fitGaussian():
                 if(tMin[ii] < temp):
                     temp = tMin[ii]
                     count += 1
-            self.yMax.append(-tMin[count])
+            self.yMax.append(tMin[count]*2)
             self.xMax.append(tXMin[count])
         else:
             self.yMax.append(tMax)

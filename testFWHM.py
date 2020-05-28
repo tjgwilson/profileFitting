@@ -5,8 +5,8 @@ import gaussianFitting as gf
 
 inc = ['20','60','80']
 freq = ['06562','12818','21655']
-# inc = ["60"]
-# freq= ["12818"]
+# inc = ["20"]
+# freq= ["21655"]
 for i in inc:
     for f in freq:
         filename= "halpha_0"+i+"_"+f+".dat"
