@@ -11,10 +11,12 @@ for i in inc:
     for f in freq:
         filename= "halpha_0"+i+"_"+f+".dat"
 
-        fitter = gf.fitGaussian(filename,verbose=True)
+        fitter = gf.fitGaussian(filename,verbose=False)
         # fitter.calcFWHM()
         # fitter.calcHWZM()
         # fitter.calcCentre()
-        # fitter.calcPeakFlux()
+        fitter.calcPeakFlux()
+        if(fitter.nMin > 0):
+            print(fitter.peaks[3],f)
         # fitter.calcEqWidths(int(f))
         # print(fitter.eqWidths)

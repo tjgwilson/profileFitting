@@ -131,9 +131,6 @@ class fitGaussian():
         # plt.plot(self.x,self.y,'k.')
         # plt.show()
         self.localMinima = localMinima
-
-
-
         #Finds the FWHM for the main fit and all the component gaussians: n is the number of points used to create the loop
         #precision is the sensitivity to which it detect the required points on the curve
     def calcFWHM(self,n=100000,precision=0.001):
@@ -250,7 +247,7 @@ class fitGaussian():
             for c in self.centres:
                 plt.axvline(c)
             plt.show()
-        #Calculates the peak flux for the fit and the gaussian components, stored into self.peaks ##[km/s]
+        #Calculates the peak flux for the fit and the gaussian components, stored into self.peaks ##
     def calcPeakFlux(self,n=100000,precision=0.001):
         self.peaks = []
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
