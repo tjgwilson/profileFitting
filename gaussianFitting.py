@@ -138,13 +138,23 @@ class fitGaussian():
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
         y = self.fit(x)
         halfMax = 0.5*np.amax(y)
+        # x1 = 0.0
+        # x2 =0.0
+        # for ii in range(len(x)): #calculates the FWHM for the main gaussian fit
+        #     if(abs(y[ii] - halfMax) <= precision):
+        #         if(x[ii] < 0.0):
+        #             x1 = x[ii]
+        #         if(x[ii] >= 0.0):
+        #             x2 = x[ii]
         x1 = 0.0
-        x2 =0.0
-        for ii in range(len(x)): #calculates the FWHM for the main gaussian fit
+        x2 = 0.0
+        first = True
+        for ii in range(len(x)):
             if(abs(y[ii] - halfMax) <= precision):
-                if(x[ii] < 0.0):
+                if(first):
                     x1 = x[ii]
-                if(x[ii] >= 0.0):
+                    first = False
+                else:
                     x2 = x[ii]
         self.FWHM.append(x2-x1)
 

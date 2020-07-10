@@ -23,7 +23,7 @@ import gaussianFitting as gf
 
 filename = "halpha_065_21655.dat"
 halpha = np.loadtxt(filename)
-fitter = gf.fitGaussian(data=halpha,verbose=True)
+fitter = gf.fitGaussian(data=halpha,sensitivity=0.01,verbose=True)
 fitter.calcFWHM()
 # fitter.calcHWZM()
 # fitter.calcCentre()
