@@ -12,7 +12,7 @@ class fitGaussian():
             input = np.loadtxt(filename)
             self.x = input[:,0]
             self.y = input[:,col]
-        elif(data != None):
+        elif(data.any() != None):
             self.x = data[:,0]
             self.y = data[:,col]
         else:
