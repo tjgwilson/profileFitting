@@ -1,17 +1,23 @@
 import numpy as np
 from astropy import modeling
-from astropy.modeling.models import Gaussian1D
+from astropy.modeling.models import Gaussian1D, Voigt1D
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+from scipy.integrate import trapz
+#copy to /usr/local/lib/python3.9/site-packages to allow other code to import
 
 class fitGaussian():
-    def __init__(self,filename=None,data=None,col=1,addNoise=False,sensitivity=1,verbose=False):
+    def __init__(self,filename=None,data=None,col=1,addNoise=False,sensitivity=1,verbose=False,continuum=1.0,blueOnly=False):
         self.c = 299792.458
         self.sensitivity = sensitivity / 100.
         self.verbose = verbose
+        self.cont = continuum
+        self.blueOnly = blueOnly
         if(filename != None):
             input = np.loadtxt(filename)
             self.x = input[:,0]
             self.y = input[:,col]
+            self.filename = filename
         elif(data.any() != None):
             self.x = data[:,0]
             self.y = data[:,col]
@@ -20,10 +26,13 @@ class fitGaussian():
         if(addNoise):
             noise = np.random.normal(1,0.05*np.amax(self.y),self.x.size)
             self.y += noise
-        self.cont = (self.y[0] + self.y[-1])/2.0
-        self.y -= self.cont
+        self.y = np.subtract(self.y,self.cont)
+
         self.fit = fitGaussian.createFit(self)
-        self.filename = filename
+        fitGaussian.calcFWHM(self)
+        fitGaussian.calcPeakFlux(self)
+        if(self.blueOnly):
+            self.fit = fitGaussian.createBlueFit(self)
 
         if(self.verbose):
             print(self.fit)
@@ -45,7 +54,10 @@ class fitGaussian():
         fitter = modeling.fitting.LevMarLSQFitter()
 
         g1 = Gaussian1D(self.yMax[0],self.xMax[0],10)
+        # g1 = Gaussian1D(self.yMax[0],0.0,20)
+        # g2 = Gaussian1D(self.yMax[0],0,10)
         g2 = Gaussian1D(self.yMax[1],self.xMax[1],5)
+
         model = g1 + g2
 
         for ii in range(self.nMin):
@@ -53,7 +65,48 @@ class fitGaussian():
 
         fitted_model = fitter(model, self.x, self.y)
         return fitted_model
+
+
+    def createBlueFit(self):
+        from scipy.optimize import curve_fit
+
+        def Gauss(x, a, x0, sigma):
+            return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
+
+        fitGaussian.findMaxima(self)
+        fitter = modeling.fitting.LevMarLSQFitter()
+
+        idx = fitGaussian.closestIndex(self.x,self.xMax[0])
+
+        yy1 = self.y[:idx]
+        yy2 = yy1[::-1]
+        yy = np.append(yy1,yy2)
+        dx = abs(self.x[0]-self.x[1])
+        Nx = len(yy)
+        xMin = np.amin(self.x)
+        xMax = self.xMax[0]
+        xx = np.zeros((Nx))
+        xRange = abs(xMin) - abs(xMax)
+
+        for ii in range(Nx):
+            xx[ii] = -xRange + (ii*dx)
+            if(yy[ii] < 0.0):
+                yy[ii] = 0.0
+
+        mean = sum(xx * yy) / sum(yy)
+        sigma = np.sqrt(sum(yy * (xx - mean)**2) / sum(yy))
+
+        g1 = Gaussian1D(amplitude=np.amax(yy),mean=mean,stddev=sigma)
+        g1.amplitude.fixed = True
+
+        fitted_model = fitter(g1, xx, yy)
+        self.x = xx
+        self.y = yy
+        return fitted_model
+
+
         #find 0,1 or 2 sub continuum minima on either side of the 0 point.
+
     def findMinima(self):
         first = True
         prec = - self.sensitivity
@@ -135,17 +188,12 @@ class fitGaussian():
         #precision is the sensitivity to which it detect the required points on the curve
     def calcFWHM(self,n=100000,precision=0.001):
         self.FWHM = []
+        n = len(self.x)*100
+        precision = np.amax(self.y)/100
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
         y = self.fit(x)
         halfMax = 0.5*np.amax(y)
-        # x1 = 0.0
-        # x2 =0.0
-        # for ii in range(len(x)): #calculates the FWHM for the main gaussian fit
-        #     if(abs(y[ii] - halfMax) <= precision):
-        #         if(x[ii] < 0.0):
-        #             x1 = x[ii]
-        #         if(x[ii] >= 0.0):
-        #             x2 = x[ii]
+
         x1 = 0.0
         x2 = 0.0
         first = True
@@ -162,23 +210,24 @@ class fitGaussian():
             plt.plot((x1,x2),(halfMax,halfMax),'r-o',markersize=5)
             plt.plot(x,y)
 
-        for f in self.fit: #calculates the FWHM for the component gaussians
-            y = f(x)
-            halfMax = 0.5*f.amplitude[0]
-            x1 = 0.0
-            x2 = 0.0
-            first = True
-            for ii in range(len(x)):
-                if(abs(y[ii] - halfMax) <= precision):
-                    if(first):
-                        x1 = x[ii]
-                        first = False
-                    else:
-                        x2 = x[ii]
-            self.FWHM.append(x2-x1)
-            if(self.verbose):
-                plt.plot(x,y)
-                plt.plot((x1,x2),(halfMax,halfMax),'r-o',markersize=5)
+        if(not self.blueOnly):
+            for f in self.fit: #calculates the FWHM for the component gaussians
+                y = f(x)
+                halfMax = 0.5*f.amplitude[0]
+                x1 = 0.0
+                x2 = 0.0
+                first = True
+                for ii in range(len(x)):
+                    if(abs(y[ii] - halfMax) <= precision):
+                        if(first):
+                            x1 = x[ii]
+                            first = False
+                        else:
+                            x2 = x[ii]
+                self.FWHM.append(x2-x1)
+                if(self.verbose):
+                    plt.plot(x,y)
+                    plt.plot((x1,x2),(halfMax,halfMax),'r-o',markersize=5)
 
 
         if(self.verbose):
@@ -187,11 +236,13 @@ class fitGaussian():
             plt.ylabel("flux")
             plt.legend()
             plt.show()
+        return self.FWHM
         #Finds the HWZM for the main fit and all the component gaussians: n is the number of points used to create the loop##[km/s]
         #precision is the sensitivity to which it detect the required points on the curve, detects at 2% peak hight.##[km/s]
-    def calcHWZM(self,n=100000,precision=0.001,zeroMag = 0.02):
-
+    def calcHWZM(self,n=100000,precision=0.001,zeroMag = 0.1):
         self.HWZM = []
+        n = len(self.x)*100
+        precision = np.amax(self.y)/100
         x = np.linspace(np.amin(self.x),np.amax(self.x),n,endpoint=True)
         y = self.fit(x)
         zeroMax = zeroMag*np.amax(y)
@@ -208,24 +259,24 @@ class fitGaussian():
         if(self.verbose):
             plt.plot((x1,x2),(zeroMax,zeroMax),'r-o',markersize=5)
             plt.plot(x,y)
-
-        for f in self.fit: #calculates the FWHM for the component gaussians
-            y = f(x)
-            zeroMax = zeroMag*f.amplitude[0]
-            x1 = 0.0
-            x2 = 0.0
-            first = True
-            for ii in range(len(x)):
-                if(abs(y[ii] - zeroMax) <= precision):
-                    if(first):
-                        x1 = x[ii]
-                        first = False
-                    else:
-                        x2 = x[ii]
-            self.HWZM.append((x2-x1)/2.0)
-            if(self.verbose):
-                plt.plot(x,y)
-                plt.plot((x1,x2),(zeroMax,zeroMax),'r-o',markersize=5)
+        if(not self.blueOnly):
+            for f in self.fit: #calculates the FWHM for the component gaussians
+                y = f(x)
+                zeroMax = zeroMag*f.amplitude[0]
+                x1 = 0.0
+                x2 = 0.0
+                first = True
+                for ii in range(len(x)):
+                    if(abs(y[ii] - zeroMax) <= precision):
+                        if(first):
+                            x1 = x[ii]
+                            first = False
+                        else:
+                            x2 = x[ii]
+                self.HWZM.append((x2-x1)/2.0)
+                if(self.verbose):
+                    plt.plot(x,y)
+                    plt.plot((x1,x2),(zeroMax,zeroMax),'r-o',markersize=5)
 
 
         if(self.verbose):
@@ -234,6 +285,7 @@ class fitGaussian():
             plt.ylabel("flux")
             plt.legend()
             plt.show()
+        return self.HWZM
         #Calculate centres of fit, and gaussian components, stored in self.centres ##[km/s]
     def calcCentre(self,n=100000,precision=0.001):
         self.centres = []
@@ -254,7 +306,7 @@ class fitGaussian():
             plt.plot(self.x,self.fit(self.x))
             for f in self.fit:
                 plt.plot(x,f(x))
-            for c in self.centres:
+            for c in self.centres[0:1]:
                 plt.axvline(c)
             plt.show()
         #Calculates the peak flux for the fit and the gaussian components, stored into self.peaks ##
@@ -275,14 +327,13 @@ class fitGaussian():
             plt.plot(self.x,self.fit(self.x))
             for f in self.fit:
                 plt.plot(x,f(x))
-            for c in self.peaks:
+            for c in self.peaks[0:1]:
                 plt.axhline(y=c)
             plt.show()
         #calculates the equivilant width of the fitted line and the component gaussians
         #output is in angstroms - converts velocity space to wavelength space
         #prio to integration via trapeziumm method. ###[\AA]
     def calcEqWidths(self,wavelength,bins=100000,dx=0.1):
-        from scipy.integrate import trapz
         self.eqWidths = []
         wl= (self.x * wavelength / self.c) + wavelength
         x = np.linspace(np.amin(self.x),np.amax(self.x),bins,endpoint=True)
@@ -322,3 +373,173 @@ class fitGaussian():
             ax[1].set_xlabel(r"Wavelength [$\AA$]")
             ax[0].set_title("Equivilant widths")
             plt.show()
+        return self.eqWidths
+
+    def closestIndex(array,value):
+        array = np.asarray(array)
+        idx = (np.abs(array-value)).argmin()
+        return idx
+
+class simpleFit():
+    def __init__(self,filename=None,data=None,col=1,sensitivity=1,verbose=False,continuum=1.0,blueOnly=False):
+        self.c = 299792.458
+        self.sensitivity = sensitivity / 100.
+        self.verbose = verbose
+        self.cont = continuum
+
+        if(filename != None):
+            input = np.loadtxt(filename)
+            self.x = input[:,0]
+            self.y = input[:,col]
+            self.filename = filename
+        elif(data.any() != None):
+            self.x = data[:,0]
+            self.y = data[:,col]
+        else:
+            print("ERROR: No imput data")
+        self.y = np.subtract(self.y,self.cont)
+        if(blueOnly):
+            self.fit = simpleFit.splineFitBlue(self)
+        else:
+            self.fit = simpleFit.splineFit(self)
+        self.peak = simpleFit.calcPeakFlux(self)
+        self.min = np.amin(self.y)
+        self.centre = simpleFit.calcCentre(self)
+        self.fwhm = simpleFit.calcFWHM(self)
+        self.hwzm = simpleFit.calcHWZM(self)
+
+        if((self.peak <= 0.0) or (self.fwhm <= 0.0) or (self.hwzm <= 0.0) or (abs(self.peak/self.min) < 0.01)):
+            print("No emission detected")
+            self.peak = 0.0
+            self.centre = 0.0
+            self.fwhm = 0.0
+            self.hwzm = 0.0
+        if(self.verbose):
+            xx = np.linspace(np.amin(self.x),np.amax(self.x),100000,endpoint=True)
+            plt.plot(self.x,self.y,'k-')
+            plt.plot(xx,self.fit(xx),'r--')
+            plt.plot(self.centre,self.peak,'g*',markersize=10)
+            plt.show()
+
+    def splineFit(self):
+        fit = interp1d(self.x,self.y,kind='linear')
+        return fit
+
+    def splineFitBlue(self):
+        idx = simpleFit.closestIndex(self.y,np.amax(self.y))
+
+        yy1 = self.y[:idx]
+        yy2 = yy1[::-1]
+        yy = np.append(yy1,yy2)
+        dx = abs(self.x[0]-self.x[1])
+        Nx = len(yy)
+        xMin = np.amin(self.x)
+        xMax = self.x[idx]
+        xx = np.zeros((Nx))
+        xRange = abs(xMin) - abs(xMax)
+        for ii in range(Nx):
+            xx[ii] = -xRange + (ii*dx)
+            if(yy[ii] < 0.0):
+                yy[ii] = 0.0
+        self.x = xx
+        self.y = yy
+        fit = interp1d(xx,yy,kind='linear')
+        return fit
+
+    def calcPeakFlux(self):
+        return np.amax(self.y)
+
+    def calcCentre(self):
+        ii = np.argmax(self.y)
+        return self.x[ii]
+
+    def closestIndex(array,value):
+        array = np.asarray(array)
+        idx = (np.abs(array-value)).argmin()
+        return idx
+
+
+    def calcFWHM(self,precision=0.000001):
+        if(self.peak > 0.0):
+            hp = 0.5*np.amax(self.y)
+            matches = []
+            found = True
+
+            xnum = len(self.x)*1000
+            precision = np.amax(self.y)/1000.
+            xx = np.linspace(np.amin(self.x),np.amax(self.x),xnum,endpoint=True)
+            yy = self.fit(xx)
+
+            for ii in range(0,len(yy)-1,1):
+                if((abs(yy[ii]-hp) <= precision)):
+                    # matches.append(ii)
+                    dif = abs(yy[ii]-hp)
+                    if(abs(yy[ii+1]-hp) < dif):
+                        continue
+                    else:
+                        matches.append(ii)
+            x1 = xx[matches[0]]
+            x2 = xx[matches[-1]]
+
+            if((matches[0] < int(xnum*0.1)) or (matches[-1] > int(xnum*0.9))):
+                x1 = 0.0
+                x2 = 0.0
+        else:
+            x1 = 0.0
+            x2 = 0.0
+
+        if(self.verbose):
+            print("FWHM Matches",matches)
+            plt.plot(self.x,self.y,'k-')
+            plt.plot(x1,self.fit(x1),'rp',markersize=5)
+            plt.plot(x2,self.fit(x2),'rp',markersize=5)
+            plt.show()
+        return x2-x1
+
+    def calcHWZM(self,precision=0.000001,zeroMag = 0.1):
+        if(self.peak > 0.0):
+            hp = zeroMag*np.amax(self.y)
+            matches = []
+            found = True
+
+            xnum = len(self.x)*1000
+            precision = np.amax(self.y)/1000.
+            xx = np.linspace(np.amin(self.x),np.amax(self.x),xnum,endpoint=True)
+            yy = self.fit(xx)
+
+            for ii in range(0,len(yy)-1,1):
+                if((abs(yy[ii]-hp) <= precision)):
+                    # matches.append(ii)
+                    dif = abs(yy[ii]-hp)
+                    if(abs(yy[ii+1]-hp) < dif):
+                        continue
+                    else:
+                        matches.append(ii)
+            x1 = xx[matches[0]]
+            x2 = xx[matches[-1]]
+
+            if((matches[0] < int(xnum*0.1)) or (matches[-1] > int(xnum*0.9))):
+                x1 = 0.0
+                x2 = 0.0
+        else:
+            x1 = 0.0
+            x2 = 0.0
+
+        if(self.verbose):
+            print("HWZM Matches",matches)
+            plt.plot(self.x,self.y,'k-')
+            plt.plot(x1,self.fit(x1),'rp',markersize=5)
+            plt.plot(x2,self.fit(x2),'rp',markersize=5)
+            plt.show()
+        return (x2-x1)*0.5
+
+    def calcEqWidths(self,wavelength,dx=0.1):
+        if(self.peak > 0.0):
+            eqWidths = 0.0
+            wl = (self.x * wavelength / self.c) + wavelength
+            dx = (abs(np.amax(wl)) + abs(np.amin(wl))) / float(len(wl))
+            y = (1.0 - ((self.y+self.cont)/self.cont))
+            eqWidths = trapz(y,wl,dx=dx)
+        else:
+            eqWidths = 0.0
+        return eqWidths

@@ -1,4 +1,4 @@
-from gaussianFitting import fitGaussian
+from line_fitting import fitGaussian, simpleFit
 
 #####TEST USE OF FITTER###########
 import matplotlib.pyplot as plt
@@ -14,17 +14,21 @@ r=0
 c=0
 check = 1
 for name in filename:
-    data = fitGaussian(name,verbose=False)
-    # data.calcEqWidths(6562.)
+    # data = fitGaussian(name,verbose=False,blueOnly=True)
+    data = simpleFit(name,verbose=False,blueOnly=True)
+    # print(data.calcFWHM()[0])
     x = data.x
     y = data.y
-    fit = data.fit
-    ax[r,c].plot(x,y,'b--')
-    ax[r,c].plot(x,fit(x),'r-')
+    fits = data.fit
+
+    ax[r,c].plot(x,y,'b--',label="model")
+    ax[r,c].plot(x,fits(x),'k',label="fit")
+
 
     c += 1
     if(check%len(inc) == 0):
         r += 1
         c = 0
     check += 1
+plt.legend()
 plt.show()

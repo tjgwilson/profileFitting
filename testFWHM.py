@@ -1,30 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import gaussianFitting as gf
+import line_fitting as gf
+
+filename = "/Users/twilson/Documents/Torus/Stellar_Wind/finalgrid/Tacc7500_Tsw10000_Macc9_Msw10/halpha_turb_020_10938.dat"
+filename = "/Users/twilson/Documents/Torus/Stellar_Wind/finalgrid/Tacc6500_Tsw6000_Macc9_Msw10/halpha_060_21655.dat"
 
 
-# inc = ['20','60','80']
-# freq = ['06562','12818','21655']
-# # inc = ["20"]
-# # freq= ["21655"]
-# for i in inc:
-#     for f in freq:
-#         filename= "halpha_0"+i+"_"+f+".dat"
-#
-#         fitter = gf.fitGaussian(filename,verbose=False)
-#         # fitter.calcFWHM()
-#         # fitter.calcHWZM()
-#         # fitter.calcCentre()
-#         fitter.calcPeakFlux()
-#         if(fitter.nMin > 0):
-#             print(fitter.peaks[3],f)
-#         # fitter.calcEqWidths(int(f))
-#         # print(fitter.eqWidths)
 
-filename = "halpha_065_21655.dat"
-halpha = np.loadtxt(filename)
-fitter = gf.fitGaussian(data=halpha,sensitivity=0.01,verbose=True)
-fitter.calcFWHM()
-# fitter.calcHWZM()
-# fitter.calcCentre()
-# fitter.calcPeakFlux()
+
+print("####################Gaussian####################")
+ft = gf.fitGaussian(filename=filename,verbose=True,blueOnly=True)
+
+ft.calcFWHM()
+ft.calcHWZM()
+print("FWHM",ft.FWHM[0])
+print("HWZM",ft.HWZM[0])
+print("EqWidth",ft.eqWidths)
