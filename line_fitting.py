@@ -54,8 +54,7 @@ class fitGaussian():
         fitter = modeling.fitting.LevMarLSQFitter()
 
         g1 = Gaussian1D(self.yMax[0],self.xMax[0],10)
-        # g1 = Gaussian1D(self.yMax[0],0.0,20)
-        # g2 = Gaussian1D(self.yMax[0],0,10)
+        g1.amplitude.fixed = True
         g2 = Gaussian1D(self.yMax[1],self.xMax[1],5)
 
         model = g1 + g2
@@ -76,22 +75,20 @@ class fitGaussian():
         fitGaussian.findMaxima(self)
         fitter = modeling.fitting.LevMarLSQFitter()
 
-        idx = fitGaussian.closestIndex(self.x,self.xMax[0])
-
+        idx = simpleFit.closestIndex(self.y,np.amax(self.y))+1
         yy1 = self.y[:idx]
         yy2 = yy1[::-1]
         yy = np.append(yy1,yy2)
-        dx = abs(self.x[0]-self.x[1])
-        Nx = len(yy)
-        xMin = np.amin(self.x)
-        xMax = self.xMax[0]
-        xx = np.zeros((Nx))
-        xRange = abs(xMin) - abs(xMax)
 
-        for ii in range(Nx):
-            xx[ii] = -xRange + (ii*dx)
+        origin = self.x[idx]
+        xx1 = self.x[:idx] - origin
+        xx2 = -1.0*(xx1[::-1])
+        xx = np.append(xx1,xx2)
+        for ii in range(len(yy)):
             if(yy[ii] < 0.0):
                 yy[ii] = 0.0
+        self.x = xx
+        self.y = yy
 
         mean = sum(xx * yy) / sum(yy)
         sigma = np.sqrt(sum(yy * (xx - mean)**2) / sum(yy))
@@ -381,6 +378,7 @@ class fitGaussian():
         return idx
 
 class simpleFit():
+
     def __init__(self,filename=None,data=None,col=1,sensitivity=1,verbose=False,continuum=1.0,blueOnly=False):
         self.c = 299792.458
         self.sensitivity = sensitivity / 100.
@@ -426,23 +424,23 @@ class simpleFit():
         return fit
 
     def splineFitBlue(self):
-        idx = simpleFit.closestIndex(self.y,np.amax(self.y))
 
+        idx = simpleFit.closestIndex(self.y,np.amax(self.y))+1
         yy1 = self.y[:idx]
         yy2 = yy1[::-1]
         yy = np.append(yy1,yy2)
-        dx = abs(self.x[0]-self.x[1])
-        Nx = len(yy)
-        xMin = np.amin(self.x)
-        xMax = self.x[idx]
-        xx = np.zeros((Nx))
-        xRange = abs(xMin) - abs(xMax)
-        for ii in range(Nx):
-            xx[ii] = -xRange + (ii*dx)
+
+        origin = self.x[idx]
+        xx1 = self.x[:idx] - origin
+        xx2 = -1.0*(xx1[::-1])
+        xx = np.append(xx1,xx2)
+        for ii in range(len(yy)):
             if(yy[ii] < 0.0):
                 yy[ii] = 0.0
         self.x = xx
         self.y = yy
+
+
         fit = interp1d(xx,yy,kind='linear')
         return fit
 
